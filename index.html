@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Battle Prototype</title>
+<style>
+*{box-sizing:border-box} body{margin:0;background:#10233a;color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+#app{max-width:900px;margin:auto;min-height:100vh;background:linear-gradient(#75d4e8,#b9edcf);padding:12px}
+.top{display:flex;justify-content:space-between;align-items:center;background:#15344e;border-radius:14px;padding:10px 14px;font-weight:700}
+.arena{margin-top:10px;background:linear-gradient(#76d66e,#3d9e55);border:5px solid #d7f4e2;border-radius:18px;padding:14px;box-shadow:0 8px 20px #08203466}
+.score{display:flex;justify-content:space-between;font-size:20px;font-weight:900}
+.team{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:12px 0}
+.card{background:#ffffffd9;color:#162536;border:3px solid #5d7180;border-radius:12px;padding:7px;min-width:0;position:relative}
+.card.enemy{border-color:#c74d55}.card.active{outline:4px solid #ffe25a;transform:translateY(-3px)}
+.icon{height:62px;border-radius:9px;display:grid;place-items:center;font-size:34px;background:linear-gradient(145deg,#8de8ff,#8e7cff)}
+.enemy .icon{background:linear-gradient(145deg,#ffb36c,#db4f74)}
+.name{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+.lv{font-size:10px;color:#526779}.bar{height:8px;background:#263442;border-radius:9px;overflow:hidden;margin-top:5px}.hp{height:100%;background:#38d46b;width:100%;transition:.25s}
+.mp{height:5px;background:#4b8de8;width:0%;margin-top:3px}
+.dead{opacity:.35;filter:grayscale(1)}
+.log{background:#102033dd;border-radius:12px;padding:10px;height:115px;overflow:auto;font-size:13px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+button{border:0;border-radius:12px;padding:12px 16px;font-weight:900;background:#ffd04d;color:#182533;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}.blue{background:#6cc9ff}.green{background:#72df8b}.red{background:#ff7777}
+.tip{text-align:center;color:#15344e;font-weight:700;margin:9px}
+@media(max-width:600px){.team{gap:4px}.card{padding:4px}.icon{height:46px;font-size:25px}.name{font-size:9px}.score{font-size:16px}}
+</style>
+</head>
+<body><div id="app">
+<div class="top"><span>⚔️ PIXEL BATTLE — Prototype</span><span id="turn">Lượt 1</span></div>
+<div class="arena">
+<div class="score"><span>🟦 Đội bạn</span><span id="status">Chiến đấu</span><span>🟥 Đối thủ</span></div>
+<div id="enemyTeam" class="team"></div>
+<div class="tip">Chọn một nhân vật còn sống của bạn → chọn mục tiêu → dùng Đánh hoặc Kỹ năng.</div>
+<div id="playerTeam" class="team"></div>
+<div class="controls">
+<button id="attack" onclick="attack()" disabled>⚔️ Đánh</button>
+<button id="skill" class="blue" onclick="skill()" disabled>✨ Kỹ năng</button>
+<button class="green" onclick="heal()">💚 Hồi phục</button>
+<button class="red" onclick="enemyTurn()" disabled id="end">⏭️ Kết thúc lượt</button>
+<button onclick="reset()">🔄 Chơi lại</button>
+</div>
+<div id="log" class="log"></div>
+</div></div>
+<script>
+const baseP=[
+ ["Lửa Long","🐉",100,24,8],["Băng Hồ","🦊",90,21,9],["Thánh Sư","🦁",120,18,12],
+ ["Lôi Ưng","🦅",85,27,7],["Mộc Linh","🌿",110,16,10],["Hắc Miêu","🐈‍⬛",95,23,8]
+];
+const baseE=[
+ ["Hỏa Vương","👹",105,23,9],["Ma Lang","🐺",95,25,7],["Thạch Quỷ","🗿",130,17,14],
+ ["Huyết Điểu","🦇",90,26,7],["Độc Xà","🐍",100,20,10],["Bóng Đêm","👾",115,22,11]
+];
+let P,E,sel=-1,target=-1,round=1,playerDone=false,gameOver=false;
+function make(a){return a.map((x,i)=>({name:x[0],icon:x[1],max:x[2],hp:x[2],atk:x[3],def:x[4],mp:0,dead:false,i}))}
+function reset(){P=make(baseP);E=make(baseE);sel=-1;target=-1;round=1;playerDone=false;gameOver=false;log("Trận đấu bắt đầu! Hãy chọn một nhân vật.");render()}
+function alive(a){return a.filter(x=>!x.dead)}
+function render(){
+ document.getElementById("turn").textContent="Lượt "+round;
+ draw("enemyTeam",E,true); draw("playerTeam",P,false);
+ document.getElementById("attack").disabled=sel<0||target<0||playerDone||gameOver;
+ document.getElementById("skill").disabled=sel<0||target<0||playerDone||gameOver||P[sel]?.mp<50;
+ document.getElementById("end").disabled=playerDone||gameOver;
+ document.getElementById("status").textContent=gameOver?(alive(P).length?"VICTORY!":"DEFEAT!"):(playerDone?"Đối thủ đang chờ":"Chọn hành động");
+}
+function draw(id,A,enemy){
+ const el=document.getElementById(id);el.innerHTML="";
+ A.forEach((c,i)=>{let d=document.createElement("div");d.className="card "+(enemy?"enemy ":"")+(c.dead?"dead ":"")+(i=== (enemy?target:sel)?"active":"");
+ d.innerHTML=`<div class="icon">${c.icon}</div><div class="name">${c.name}</div><div class="lv">Lv.${enemy?140:100}</div><div class="bar"><div class="hp" style="width:${Math.max(0,c.hp/c.max*100)}%"></div></div><div class="mp" style="width:${c.mp}%"></div><small>${Math.max(0,c.hp)}/${c.max}</small>`;
+ if(!c.dead)d.onclick=()=>enemy?selectTarget(i):selectPlayer(i);el.appendChild(d)})
+}
+function selectPlayer(i){if(gameOver||playerDone)return;sel=i;log("Đã chọn "+P[i].name+". Chọn mục tiêu bên đỏ.");render()}
+function selectTarget(i){if(gameOver||playerDone)return;target=i;log("Mục tiêu: "+E[i].name);render()}
+function dmg(a,b,power=1){let raw=Math.max(1,Math.floor(a.atk*power-b.def*.45));let crit=Math.random()<.15?2:1;raw*=crit;b.hp-=raw;a.mp=Math.min(100,a.mp+30);return [raw,crit>1]}
+function check(){E.forEach(x=>{if(x.hp<=0)x.dead=true});P.forEach(x=>{if(x.hp<=0)x.dead=true});if(!alive(E).length){gameOver=true;log("🏆 Bạn thắng!");}else if(!alive(P).length){gameOver=true;log("💥 Bạn đã thua.");}}
+function attack(){if(sel<0||target<0)return;let [n,c]=dmg(P[sel],E[target],1);log(`${P[sel].icon} ${P[sel].name} gây ${n}${c?" chí mạng ":""} sát thương lên ${E[target].name}.`);P[sel].mp=Math.min(100,P[sel].mp+10);afterPlayer()}
+function skill(){if(P[sel].mp<50)return;let a=P[sel];let [n,c]=dmg(a,E[target],1.9);a.mp=0;log(`✨ ${a.name} dùng KỸ NĂNG, gây ${n} sát thương!`);afterPlayer()}
+function heal(){if(sel<0||playerDone)return;let a=P[sel];let amount=Math.floor(a.max*.25);a.hp=Math.min(a.max,a.hp+amount);a.mp=Math.min(100,a.mp+15);log(`💚 ${a.name} hồi ${amount} HP.`);afterPlayer()}
+function afterPlayer(){check();if(gameOver){render();return}playerDone=true;render();setTimeout(enemyTurn,450)}
+function enemyTurn(){if(gameOver)return;let choices=alive(E);if(!choices.length)return;let a=choices[Math.floor(Math.random()*choices.length)];let ps=alive(P);let b=ps[Math.floor(Math.random()*ps.length)];let [n,c]=dmg(a,b,1);log(`🤖 ${a.name} tấn công ${b.name}, gây ${n}${c?" chí mạng ":""} sát thương.`);check();if(!gameOver){round++;playerDone=false;sel=-1;target=-1;render()}}
+function log(s){let el=document.getElementById("log");el.innerHTML+=`<div>• ${s}</div>`;el.scrollTop=el.scrollHeight}
+reset();
+</script></body></html>
